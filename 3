@@ -1,0 +1,155 @@
+-- โหลด UI Library
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua"))()
+local Window = Library.CreateLib("GUPRO", "DarkTheme")
+local Tab = Window:NewTab("AutoFarm")
+local Section = Tab:NewSection("CombatOpen")
+
+-- Services
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+
+local marineIsland = game:GetService("Workspace").Playability.Enemys["Marine Island"]
+local ToolsEvent = game:GetService("ReplicatedStorage").BetweenSides.Remotes.Events.ToolsEvent
+
+local attackDistance = 5
+local tweenHeight = 2
+
+local autoFarmEnabled = false
+local autoFarmThread
+
+local character = nil
+local hrp = nil
+local humanoid = nil
+
+local function setupCharacter(char)
+    character = char
+    hrp = character:WaitForChild("HumanoidRootPart")
+    humanoid = character:WaitForChild("Humanoid")
+end
+
+setupCharacter(player.Character or player.CharacterAdded:Wait())
+
+-- Tween ปรับความสูงตาม tweenHeight และหมุนก้มหน้า
+local currentTween = nil
+local function tweenTo(pos)
+    if not hrp then return end
+
+    local targetPos = Vector3.new(pos.X, pos.Y + tweenHeight, pos.Z)
+
+    local lookAt = CFrame.new(hrp.Position, pos)
+    local tiltAngle = math.rad(-60)
+    local rx, ry, rz = lookAt:ToEulerAnglesYXZ()
+    local finalCFrame = CFrame.new(targetPos) * CFrame.Angles(tiltAngle, ry, rz)
+
+    if currentTween then
+        currentTween:Cancel()
+        currentTween = nil
+    end
+
+    local distance = (hrp.Position - targetPos).Magnitude
+    local speed = 50
+    if distance > 100 then speed = 100 end
+
+    local tweenInfo = TweenInfo.new(distance / speed, Enum.EasingStyle.Linear)
+
+    currentTween = TweenService:Create(hrp, tweenInfo, {CFrame = finalCFrame})
+    currentTween:Play()
+    currentTween.Completed:Wait()
+end
+
+local function attackTarget()
+    if ToolsEvent and ToolsEvent.FireServer then
+        ToolsEvent:FireServer("Effects", 1)
+    end
+end
+
+-- ฟังก์ชันหาตัวมอนสเตอร์ที่ใกล้ที่สุดใน Marine Island
+local function getClosestMob()
+    local closestMob = nil
+    local closestDist = math.huge
+    if not hrp then return nil end
+
+    for _, mobName in ipairs({"Recruit61","Recruit62","Recruit63","Recruit64","Recruit65","Recruit66"}) do
+        local mob = marineIsland:FindFirstChild(mobName)
+        if mob and mob:FindFirstChild("HumanoidRootPart") and mob:FindFirstChildOfClass("Humanoid") then
+            local hum = mob:FindFirstChildOfClass("Humanoid")
+            if hum.Health > 0 then
+                local dist = (hrp.Position - mob.HumanoidRootPart.Position).Magnitude
+                if dist < closestDist then
+                    closestDist = dist
+                    closestMob = mob
+                end
+            end
+        end
+    end
+    return closestMob, closestDist
+end
+
+local function autoFarm()
+    while autoFarmEnabled do
+        if not character or not hrp or not humanoid or humanoid.Health <= 0 then
+            -- รอให้เกิดใหม่
+            repeat task.wait(0.5) until character and hrp and humanoid and humanoid.Health > 0
+        end
+
+        local mob, dist = getClosestMob()
+        if mob and dist then
+            if dist > attackDistance then
+                tweenTo(mob.HumanoidRootPart.Position)
+            end
+            attackTarget()
+        else
+            -- ไม่มีมอนสเตอร์ที่ยังไม่ตายในรัศมี รอรอบถัดไป
+            task.wait(0.5)
+        end
+        task.wait(0.1) -- รัวหมัดตีเร็วๆ
+    end
+end
+
+local function setAutoFarm(state)
+    autoFarmEnabled = state
+    if state then
+        autoFarmThread = task.spawn(autoFarm)
+    else
+        if currentTween then
+            currentTween:Cancel()
+            currentTween = nil
+        end
+    end
+end
+
+player.CharacterAdded:Connect(function(char)
+    setupCharacter(char)
+    if autoFarmEnabled then
+        setAutoFarm(false)
+        task.wait(0.2)
+        setAutoFarm(true)
+    end
+end)
+
+-- UI Toggle เปิด-ปิด Auto Farm
+Section:NewToggle("Toggle Auto Farm", "Start/Stop Auto Farm Recruit61-66 แบบไก่ตัน", function(state)
+    setAutoFarm(state)
+end)
+
+-- UI Slider ปรับความสูง Tween 1-10 stud
+Section:NewSlider("Adjust Tween Height", "ปรับความสูงเวลาขึ้นตี (Stud)", 10, 1, function(value)
+    tweenHeight = value
+    print("[Auto Farm] Tween Height set to:", tweenHeight)
+end)
+
+-- ป้องกัน Humanoid กระโดดตอน Auto Farm
+RunService.Heartbeat:Connect(function()
+    if humanoid and autoFarmEnabled then
+        humanoid.JumpPower = 0
+        humanoid.UseJumpPower = true
+    elseif humanoid then
+        humanoid.JumpPower = 50
+        humanoid.UseJumpPower = true
+    end
+end)
+
+print("[Auto Farm] Ready to farm like Blox Fruits chicken!")
