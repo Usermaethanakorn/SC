@@ -1,0 +1,56 @@
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local hrp = character:WaitForChild("HumanoidRootPart")
+
+local workspace = game:GetService("Workspace")
+local enemiesFolder = workspace:WaitForChild("Playability"):WaitForChild("Enemys"):WaitForChild("Marine Island")
+
+-- ปรับตรงนี้ได้เลย ความสูงเหนือหัว
+local heightAboveHead = 5
+
+-- ฟังก์ชันตรวจสอบว่าศัตรูตายหรือยัง (สมมติใช้ Humanoid.Health)
+local function isEnemyAlive(enemy)
+    local humanoid = enemy:FindFirstChildWhichIsA("Humanoid")
+    return humanoid and humanoid.Health > 0
+end
+
+-- ฟังก์ชันวาปไปตำแหน่งข้างบนหัวศัตรู
+local function teleportAboveEnemy(enemy)
+    local rootPart = enemy:FindFirstChild("HumanoidRootPart")
+    if rootPart then
+        hrp.CFrame = rootPart.CFrame * CFrame.new(0, heightAboveHead, 0)
+    end
+end
+
+-- ฟังก์ชันตีศัตรู (ปรับเป็นการยิง RemoteEvent ของเกมคุณได้)
+local function attackEnemy(enemy)
+    -- ตัวอย่างสมมติยิง RemoteEvent
+    -- local remote = game:GetService("ReplicatedStorage"):WaitForChild("AttackEnemyRemote")
+    -- remote:FireServer(enemy)
+    
+    -- หรือถ้าไม่มี Remote ใช้แค่รอให้เวลาผ่านไป (แทนการตี)
+    print("กำลังตีศัตรู: "..enemy.Name)
+end
+
+-- ตัว main loop วนลูปตีทีละตัว
+local function autoFarm()
+    for i = 61, 66 do
+        local enemyName = "Recruit"..i
+        local enemy = enemiesFolder:FindFirstChild(enemyName)
+        if enemy and isEnemyAlive(enemy) then
+            print("เริ่มตี "..enemyName)
+            teleportAboveEnemy(enemy)
+            attackEnemy(enemy)
+
+            -- รอจนศัตรูตายก่อนจะไปตัวถัดไป
+            repeat
+                wait(1)
+            until not isEnemyAlive(enemy)
+            print(enemyName.." ตายแล้ว")
+        end
+    end
+    print("ตีครบแล้ว")
+end
+
+autoFarm()
