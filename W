@@ -1,0 +1,73 @@
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua"))()
+local Window = Library.CreateLib("TITLE", "DarkTheme")
+local Tab = Window:NewTab("WALLBANK")
+local Section = Tab:NewSection("OPENFUNCTION")
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+
+-- ตัวแปรเก็บสถานะเปิด/ปิด
+local walkThroughEnabled = false
+local connection
+
+local function setWalkThrough(state)
+    walkThroughEnabled = state
+    if walkThroughEnabled then
+        -- ถ้าเชื่อมต่อ loop อยู่แล้ว ให้ตัดก่อน
+        if connection then connection:Disconnect() end
+
+        connection = RunService.Heartbeat:Connect(function()
+            local character = LocalPlayer.Character
+            if character then
+                for _, part in pairs(character:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        if part.CanCollide == true then
+                            part.CanCollide = false
+                        end
+                    end
+                end
+            end
+        end)
+    else
+        -- ปิด walk through ให้คืนค่า CanCollide เป็น true
+        if connection then
+            connection:Disconnect()
+            connection = nil
+        end
+
+        local character = LocalPlayer.Character
+        if character then
+            for _, part in pairs(character:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.CanCollide = true
+                end
+            end
+        end
+    end
+end
+
+Section:NewToggle("Walk Through Walls", "เดินทะลุได้ไม่มีหลุด", function(enabled)
+    setWalkThrough(enabled)
+end)
+
+-- จัดการตัวละครรีเซ็ต
+Players.PlayerAdded:Connect(function(player)
+    if player == LocalPlayer then
+        player.CharacterAdded:Connect(function(char)
+            task.wait(1)
+            if walkThroughEnabled then
+                for _, part in pairs(char:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = false
+                    end
+                end
+            end
+        end)
+    end
+end)
+
+-- กรณี LocalPlayer ตัวเดิมที่อาจโหลดแล้ว
+if LocalPlayer.Character then
+    LocalPlayer.Character:WaitForChild("HumanoidRootPart")
+end
